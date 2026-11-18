@@ -1,0 +1,53 @@
+= Specel
+
+image:https://img.shields.io/clojars/v/io.dominic/specel.svg[Clojars Project, link="https://clojars.org/io.dominic/specel"]
+image:https://cljdoc.org/badge/io.dominic/specel[cljdoc, link="https://cljdoc.org/d/io.dominic/specel/CURRENT"]
+
+`clojure.spec.alpha/gen` for link:https://github.com/aphyr/hegel-clj/[hegel-clj].
+
+== Usage
+
+[,clojure]
+----
+(require
+  '[clojure.spec.alpha :as s]
+  '[specel.core :as sc]
+  '[hegel-clj.core :as h]
+  '[hegel-clj.generator :as g])
+
+(defn r? [n] (when (even? n) n))
+
+(s/def ::x int?)
+(s/def ::y string?)
+(s/def ::z r?)
+;; Define custom generators for specs
+(sc/def ::z (g/filter (fn [n] (= \2 (last (str n)))) (g/integer)))
+
+(s/def ::foo (s/keys :req [::x ::y] :opt [::z]))
+;; Default ::y values inside ::foo start with "XXX-".
+;; A caller-supplied ::y override takes precedence.
+(sc/def* ::foo
+  (fn [overrides path rmap]
+    (sc/gen* (s/get-spec ::foo)
+             (merge {(conj path ::y) #(g/fmap (fn [s] (str "XXX-" s))
+                                              (g/string))}
+                    overrides)
+             path rmap)))
+
+(h/sample 10 (sc/gen ::foo))
+----
+
+== Differences from `s/gen`
+
+. multi-specs support overriding their tag
+. spec aliases work for generator overrides:
++
+[,clojure]
+----
+(s/def ::x int?)
+(s/def ::y ::x)
+(sc/gen (s/keys :req [::y]) {::y #(g/just 10)})
+(sc/gen (s/keys :req [::x]) {::x #(g/just 10)})
+----
++
+These cases both now override, where the former wouldn't in clojure.spec.alpha.
